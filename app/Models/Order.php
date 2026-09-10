@@ -13,6 +13,8 @@ class Order extends Model
         'subtotal',
         'tax',
         'grand_total',
+        'amount_paid',
+        'balance',
     ];
 
     public function customer(): BelongsTo

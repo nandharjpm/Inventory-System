@@ -19,6 +19,9 @@ return new class extends Migration
             $table->decimal('tax', 12, 2)->default(0);
             $table->decimal('grand_total', 12, 2)->default(0);
 
+            // Payment snapshot
+            $table->decimal('amount_paid', 12, 2)->default(0);
+            $table->decimal('balance', 12, 2)->default(0);
             $table->timestamps();
         });
     }

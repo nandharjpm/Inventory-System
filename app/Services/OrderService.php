@@ -8,10 +8,11 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use App\Jobs\SendOrderConfirmation;
 
 class OrderService
 {
-    public function createOrder(array $validated): Order
+    public function createOrder(array $validated)
     {
         return DB::transaction(function () use ($validated) {
             $customer = Customer::query()->firstOrCreate(
@@ -29,7 +30,17 @@ class OrderService
             $tax = 0;
 
             foreach ($validated['items'] as $item) {
-                $product = Product::query()->findOrFail($item['product_id']);
+                $product = Product::query()->lockForUpdate()->findOrFail($item['product_id']);
+
+                $requestedQty = (int) $item['quantity'];
+
+                if ($product->stock_on_hand < $requestedQty) {
+                    throw new \Exception(
+                        "The product '{$product->name}' has insufficient stock. " .
+                        "Available stock: {$product->stock_on_hand}, " .
+                        "requested: {$requestedQty}."
+                    );
+                }
 
                 $lineSubtotal = (float) $product->price * (int) $item['quantity'];
                 $lineTax = $lineSubtotal * ((float) $product->tax_percentage / 100);
@@ -51,11 +62,27 @@ class OrderService
                 $product->decrement('stock_on_hand', $item['quantity']);
             }
 
+            $grandTotal = $subtotal + $tax;
+
+                $amountPaid = isset($validated['amount_paid']) ? (float) $validated['amount_paid'] : 0.0;
+
+                if ($amountPaid < $grandTotal) {
+                    throw new \Exception(
+                        "The amount given ({$amountPaid}) is less than the order total ({$grandTotal})."
+                    );
+                }
+
+                $balance = max($amountPaid - $grandTotal, 0);
+
             $order->update([
                 'subtotal' => $subtotal,
                 'tax' => $tax,
-                'grand_total' => $subtotal + $tax,
+                'grand_total' => $grandTotal,
+                'amount_paid' => $amountPaid,
+                'balance' => $balance,
             ]);
+            // dispatch a queued job to simulate sending confirmation
+            SendOrderConfirmation::dispatch($order->fresh(['customer', 'items.product']));
 
             return $order->fresh(['customer', 'items.product']);
         });

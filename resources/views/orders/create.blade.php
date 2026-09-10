@@ -118,8 +118,6 @@
 
                         <tbody id="order-items">
 
-                            {{-- Product rows inserted by JavaScript --}}
-
                         </tbody>
 
                     </table>
@@ -164,13 +162,15 @@
                         <label for="amount_paid">
                             Amount Given
                         </label>
-
                         <input
                             type="number"
                             id="amount_paid"
+                            name="amount_paid"
                             min="0"
                             step="0.01"
                             placeholder="0.00"
+                            value="{{ old('amount_paid', 0) }}"
+                            required
                         >
                     </div>
 
@@ -257,6 +257,8 @@
         ];
     })->values();
 @endphp
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.5/dist/jquery.validate.min.js"></script>
 <script>
     const products = @json($productData);
 
@@ -305,6 +307,8 @@
 
                     ${productOptions()}
                 </select>
+
+                <div class="stock-message"></div>
             </td>
 
             <td>
@@ -498,6 +502,378 @@
 
     // Start with one product row.
     addProductRow();
+
+    $(document).ready(function () {
+
+        function checkProductStock(row) {
+
+            const productId = row.find('.product-select').val();
+            const quantity = Number(
+                row.find('.quantity-input').val()
+            );
+
+            const message = row.find('.stock-message');
+
+            message.removeClass(
+                'success error loading'
+            ).hide();
+
+            if (!productId || !quantity || quantity < 1) {
+                return;
+            }
+
+            message
+                .addClass('loading')
+                .text('Checking stock...')
+                .show();
+
+            $.ajax({
+                url: "{{ route('orders.check-stock') }}",
+                type: "POST",
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    product_id: productId,
+                    quantity: quantity
+                },
+
+                success: function (response) {
+
+                    if (response.available) {
+
+                        message
+                            .removeClass('loading error')
+                            .addClass('success')
+                            .text(
+                                '✓ ' +
+                                response.available_stock +
+                                ' unit(s) available'
+                            )
+                            .show();
+
+                        row.find('.product-select')
+                            .removeClass('is-invalid');
+
+                        row.find('.quantity-input')
+                            .removeClass('is-invalid');
+
+                    } else {
+
+                        message
+                            .removeClass('loading success')
+                            .addClass('error')
+                            .text(
+                                '⚠ ' + response.message
+                            )
+                            .show();
+
+                        row.find('.quantity-input')
+                            .addClass('is-invalid');
+                    }
+                },
+
+                error: function () {
+
+                    message
+                        .removeClass('loading success')
+                        .addClass('error')
+                        .text(
+                            'Unable to check stock. Please try again.'
+                        )
+                        .show();
+                }
+            });
+        }
+
+        $('#order-form').validate({
+            ignore: [],
+
+            rules: {
+                'customer[email]': {
+                    required: true,
+                    email: true
+                },
+
+                'customer[name]': {
+                    required: true,
+                    minlength: 2,
+                    maxlength: 100
+                },
+
+                amount_paid: {
+                    required: true,
+                    number: true,
+                    min: 0
+                }
+            },
+
+            messages: {
+                'customer[email]': {
+                    required: 'Please enter customer email.',
+                    email: 'Please enter a valid email address.'
+                },
+
+                'customer[name]': {
+                    required: 'Please enter customer name.',
+                    minlength: 'Name must be at least 2 characters.',
+                    maxlength: 'Name cannot exceed 100 characters.'
+                },
+
+                amount_paid: {
+                    required: 'Please enter the amount given.',
+                    number: 'Please enter a valid amount.',
+                    min: 'Amount cannot be negative.'
+                }
+            },
+
+            errorElement: 'span',
+
+            errorClass: 'validation-error',
+
+            errorPlacement: function (error, element) {
+                error.insertAfter(element);
+            },
+
+            highlight: function (element) {
+                $(element).addClass('is-invalid');
+            },
+
+            unhighlight: function (element) {
+                $(element).removeClass('is-invalid');
+            },
+
+
+            submitHandler: function (form) {
+
+                if ($('#order-items tr').length === 0) {
+
+                    alert(
+                        'Please add at least one product.'
+                    );
+
+                    return false;
+                }
+
+                let validProducts = true;
+
+                $('#order-items tr').each(function () {
+
+                    const row = $(this);
+
+                    const product =
+                        row.find('.product-select').val();
+
+                    const quantity =
+                        Number(
+                            row.find('.quantity-input').val()
+                        );
+
+                    if (!product) {
+
+                        validProducts = false;
+
+                        row.find('.product-select')
+                            .addClass('is-invalid');
+                    }
+
+                    if (!quantity || quantity < 1) {
+
+                        validProducts = false;
+
+                        row.find('.quantity-input')
+                            .addClass('is-invalid');
+                    }
+                });
+
+                if (!validProducts) {
+                    return false;
+                }
+
+                const submitButton = $('#submit-order');
+
+                submitButton.prop('disabled', true).text('Checking stock...');
+
+                const stockRequests = [];
+
+                $('#order-items tr').each(function () {
+
+                    const row = $(this);
+
+                    const productId =
+                        row.find('.product-select').val();
+
+                    const quantity =
+                        Number(
+                            row.find('.quantity-input').val()
+                        );
+
+                    const request = $.ajax({
+                        url: "{{ route('orders.check-stock') }}",
+                        type: "POST",
+
+                        data: {
+                            _token: "{{ csrf_token() }}",
+                            product_id: productId,
+                            quantity: quantity
+                        }
+                    });
+
+                    stockRequests.push(request);
+                });
+
+                $.when.apply($, stockRequests)
+                    .done(function () {
+
+                        let allAvailable = true;
+
+                        const args = arguments;
+
+                        $('#order-items tr').each(function (index) {
+
+                            const row = $(this);
+
+                            // The $.when done handler receives different shapes depending on
+                            // number of requests: a single request gives (data, textStatus, jqXHR),
+                            // multiple requests give arrays like [data, textStatus, jqXHR].
+                            let raw = stockRequests.length === 1 ? args[0] : args[index];
+
+                            // Normalize to the response data object.
+                            let response = raw;
+
+                            if (Array.isArray(raw)) {
+                                response = raw[0];
+                            }
+
+                            if (!response && raw && raw.responseJSON) {
+                                response = raw.responseJSON;
+                            }
+
+                            response = response || {};
+
+                            if (!response.available) {
+
+                                allAvailable = false;
+
+                                row.find('.quantity-input')
+                                    .addClass('is-invalid');
+
+                                // Build a safe, human-friendly message.
+                                let msg = response.message || response.errors || 'Stock not available.';
+
+                                if (typeof msg === 'object') {
+                                    const firstKey = Object.keys(msg)[0];
+                                    if (firstKey && Array.isArray(msg[firstKey])) {
+                                        msg = msg[firstKey][0];
+                                    } else {
+                                        msg = JSON.stringify(msg);
+                                    }
+                                }
+
+                                row.find('.stock-message')
+                                    .removeClass('success loading')
+                                    .addClass('error')
+                                    .text('⚠ ' + msg)
+                                    .show();
+                            }
+                        });
+
+                        if (!allAvailable) {
+
+                            submitButton
+                                .prop('disabled', false)
+                                .text('Generate Bill');
+
+                            return;
+                        }
+
+                        // Client-side check: ensure amount paid covers grand total
+                        const grandTotalVal = calculateGrandTotal();
+                        const paidVal = Number(amountPaidElement.value) || 0;
+
+                        if (paidVal < grandTotalVal) {
+                            submitButton.prop('disabled', false).text('Generate Bill');
+
+                            // mark field invalid and show a validation message
+                            $(amountPaidElement).addClass('is-invalid');
+
+                            let err = $("<span class=\"validation-error amount-paid-error\"></span>");
+                            err.text('Amount given is less than the order total.');
+
+                            // remove any previous message then insert
+                            $('.amount-paid-error').remove();
+                            $(amountPaidElement).after(err);
+
+                            // scroll to payment area for visibility
+                            $(amountPaidElement)[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                            return;
+                        }
+
+                        form.submit();
+                    })
+                    .fail(function (jqXHR) {
+
+                        submitButton
+                            .prop('disabled', false)
+                            .text('Generate Bill');
+
+                        let message = 'Unable to verify stock. Please try again.';
+
+                        if (jqXHR && jqXHR.responseJSON) {
+                            const resp = jqXHR.responseJSON;
+                            if (resp.message) message = resp.message;
+                            else if (resp.errors) {
+                                const firstKey = Object.keys(resp.errors)[0];
+                                if (firstKey && Array.isArray(resp.errors[firstKey])) {
+                                    message = resp.errors[firstKey][0];
+                                }
+                            }
+                        }
+
+                        alert(message);
+                    });
+
+                return false;
+            }
+        });
+
+        $('#order-items').on(
+            'change',
+            '.product-select',
+            function () {
+
+                const row = $(this).closest('tr');
+
+                $(this).removeClass('is-invalid');
+
+                checkProductStock(row);
+            }
+        );
+
+        $('#order-items').on(
+            'input',
+            '.quantity-input',
+            function () {
+
+                const row = $(this).closest('tr');
+
+                $(this).removeClass('is-invalid');
+
+                clearTimeout(
+                    row.data('stockTimer')
+                );
+
+                const timer = setTimeout(function () {
+                    checkProductStock(row);
+                }, 400);
+
+                row.data(
+                    'stockTimer',
+                    timer
+                );
+            }
+        );
+
+    });
 </script>
 
 @endpush
