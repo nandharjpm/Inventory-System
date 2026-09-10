@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Mail\OrderConfirmationMail;
 use App\Models\Order;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -9,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class SendOrderConfirmation implements ShouldQueue
 {
@@ -20,7 +22,14 @@ class SendOrderConfirmation implements ShouldQueue
 
     public function handle(): void
     {
-        // Simulate sending mail — log the confirmation
-        Log::info('SendOrderConfirmation: order #' . $this->order->id . ' for customer ' . $this->order->customer->email);
+        try {
+            // Queue the mailable so it is sent in the background by the queue worker
+            Mail::to($this->order->customer->email)
+                ->queue(new OrderConfirmationMail($this->order->load(['customer', 'items.product'])));
+
+            Log::info('SendOrderConfirmation: mailable queued for order #' . $this->order->id);
+        } catch (\Exception $ex) {
+            Log::error('SendOrderConfirmation failed for order #' . $this->order->id . ': ' . $ex->getMessage());
+        }
     }
 }

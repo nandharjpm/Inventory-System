@@ -49,17 +49,7 @@
 
     <section class="card orders-history-card">
 
-        <div class="card-header card-header-row">
-            <div>
-                <h2>Orders</h2>
-                <p>Recent orders are shown first.</p>
-            </div>
-
-            <span class="order-count">
-                {{ $customer->orders->count() }}
-                {{ Str::plural('Order', $customer->orders->count()) }}
-            </span>
-        </div>
+        
 
 
         @if($customer->orders->isEmpty())
@@ -79,6 +69,25 @@
             </div>
 
         @else
+
+            @if($customer->orders->count() >= 2)
+                @php
+                    $first = $customer->orders->first();
+                    $second = $customer->orders->get(1);
+                    $firstMap = $first->items->pluck('quantity', 'product_id')->toArray();
+                    $secondMap = $second->items->pluck('quantity', 'product_id')->toArray();
+
+                    $firstIds = array_keys($firstMap);
+                    $secondIds = array_keys($secondMap);
+
+                    $onlyFirst = array_diff($firstIds, $secondIds);
+                    $onlySecond = array_diff($secondIds, $firstIds);
+                    $both = array_intersect($firstIds, $secondIds);
+                @endphp
+
+                
+
+            @endif
 
             <div class="history-list">
 

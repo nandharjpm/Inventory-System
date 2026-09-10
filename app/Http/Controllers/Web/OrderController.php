@@ -125,13 +125,25 @@ class OrderController extends Controller
     {
         $customer = Customer::query()
             ->where('email', $email)
-            ->with([
-                'orders' => fn ($query) => $query
-                    ->latest()
-                    ->with('items.product'),
-            ])
+            ->with(['orders' => fn ($query) => $query->orderBy('created_at')->with('items.product')])
             ->firstOrFail();
 
         return view('orders.history', compact('customer'));
+    }
+
+    public function customers()
+    {
+        $customers = Customer::with('orders')->get()->map(function ($c) {
+            $total = $c->orders->sum('grand_total');
+            return (object) [
+                'id' => $c->id,
+                'name' => $c->name,
+                'email' => $c->email,
+                'orders_count' => $c->orders->count(),
+                'total_spent' => $total,
+            ];
+        });
+
+        return view('orders.customers', ['customers' => $customers]);
     }
 }

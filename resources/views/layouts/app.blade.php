@@ -7,8 +7,23 @@
         <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     </head>
     <body>
+        <header class="app-header">
+            <div class="container header-content">
+                <div class="brand">
+                    <a href="{{ url('/') }}">Shopping App</a>
+                </div>
+
+                <nav class="navigation">
+                    <a href="{{ route('orders.create') }}">New Order</a>
+                    <a href="{{ route('orders.customers') }}">Customers</a>
+                </nav>
+            </div>
+        </header>
+
         <main>
-            @yield('content')
+            <div class="container">
+                @yield('content')
+            </div>
         </main>
 
         @stack('scripts')

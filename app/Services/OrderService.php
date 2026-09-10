@@ -81,7 +81,6 @@ class OrderService
                 'amount_paid' => $amountPaid,
                 'balance' => $balance,
             ]);
-            // dispatch a queued job to simulate sending confirmation
             SendOrderConfirmation::dispatch($order->fresh(['customer', 'items.product']));
 
             return $order->fresh(['customer', 'items.product']);

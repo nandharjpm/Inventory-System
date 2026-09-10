@@ -1,4 +1,4 @@
-# Shopping_App — Order & Inventory Mini-System
+# Shopping_App - Order & Inventory Mini-System
 
 This app implements a simple retail counter for orders and inventory.
 
@@ -14,6 +14,6 @@ php artisan queue:work &
 
 API endpoints (basic):
 
-- POST /api/orders — create order
-- GET /api/orders/history?email=... — customer orders
-- GET /api/products/low-stock?threshold=5 — low stock products
+- POST /api/orders - create order
+- GET /api/orders/history?email=user@gmail.com - customer orders
+- GET /api/products/low-stock?threshold=5 - low stock products
