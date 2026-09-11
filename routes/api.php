@@ -1,18 +1,15 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\OrderApiController;
+use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| These routes are loaded by the RouteServiceProvider within a group which
-| is assigned the "api" middleware group. Enjoy building your API!
-|
-*/
+Route::prefix('orders')->group(function () {
+    Route::post('/', [OrderApiController::class, 'create']);
+    Route::post('/check-stock', [OrderApiController::class, 'checkStock']);
+    Route::get('/history', [OrderApiController::class, 'history']);
+    Route::get('/history/{customer:email}', [OrderApiController::class, 'history']);
+    Route::get('/customers', [OrderApiController::class, 'customers']);
+    Route::get('/{order}', [OrderApiController::class, 'show'])->whereNumber('order');
+});
 
-Route::post('/orders', [OrderApiController::class, 'create']);
-Route::get('/orders/history', [OrderApiController::class, 'history']);
 Route::get('/products/low-stock', [OrderApiController::class, 'lowStock']);

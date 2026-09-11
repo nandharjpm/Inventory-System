@@ -55,4 +55,55 @@ class CreateOrderTest extends TestCase
 
         $this->assertDatabaseHas('products', ['id' => $product->id, 'stock_on_hand' => 1]);
     }
+
+    public function test_api_order_stock_check_route_returns_json(): void
+    {
+        $product = Product::create([
+            'name' => 'API Stock Item',
+            'code' => 'API-1',
+            'price' => 80.00,
+            'tax_percentage' => 5.00,
+            'stock_on_hand' => 4,
+        ]);
+
+        $response = $this->postJson('/api/orders/check-stock', [
+            'product_id' => $product->id,
+            'quantity' => 3,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('available', true)
+            ->assertJsonPath('requested', 3);
+    }
+
+    public function test_api_customer_summary_route_returns_json(): void
+    {
+        $product = Product::create([
+            'name' => 'Customer Summary Product',
+            'code' => 'CS-1',
+            'price' => 100.00,
+            'tax_percentage' => 10.00,
+            'stock_on_hand' => 10,
+        ]);
+
+        $customer = Customer::create([
+            'name' => 'Charlie',
+            'email' => 'charlie@example.com',
+        ]);
+
+        $customer->orders()->create([
+            'subtotal' => 100.00,
+            'tax' => 10.00,
+            'grand_total' => 110.00,
+            'amount_paid' => 110.00,
+            'balance' => 0.00,
+        ]);
+
+        $response = $this->getJson('/api/orders/customers');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonFragment(['email' => 'charlie@example.com']);
+    }
 }
